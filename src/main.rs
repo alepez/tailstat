@@ -1,4 +1,7 @@
-use std::io::prelude::*;
+use std::{
+    io::prelude::*,
+    sync::{Arc, Mutex},
+};
 
 struct Counter {
     start: std::time::Instant,
@@ -44,6 +47,21 @@ impl Counter {
     }
 }
 
+fn start_counter(counter: Counter) -> Arc<Mutex<Counter>> {
+    let counter = Arc::new(Mutex::new(counter));
+
+    let counter_copy = counter.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        {
+            let mut counter = counter_copy.lock().unwrap();
+            counter.update();
+        }
+    });
+
+    counter
+}
+
 fn main() {
     let time_span: f32 = std::env::args()
         .nth(1)
@@ -55,10 +73,12 @@ fn main() {
     let stdin = std::io::stdin();
     let stdin = stdin.lock();
 
-    let mut counter = Counter::new(time_span);
+    let counter = Counter::new(time_span);
+    let counter = start_counter(counter);
 
-    stdin.lines().map(Result::unwrap).for_each(|_line| {
-        counter.update();
+    stdin.lines().map(Result::unwrap).for_each(|line| {
+        // println!("{}", line);
+        let mut counter = counter.lock().unwrap();
         counter.increase();
     });
 }
